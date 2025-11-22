@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Pixel Maze Algebra Escape — Full Edition</title>
+<style>
+
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+:root{
+  --bg1:#0b0b12; --bg2:#0f1720; --accent:#66ff66; --muted:#666;
+  --panel:#111; --danger:#c0392b; --good:#2ecc71;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0; padding:0; font-family:'Press Start 2P', monospace;
+  background: radial-gradient(1200px 600px at 10% 10%, rgba(50,50,80,0.08), transparent),
+              linear-gradient(180deg,var(--bg1),var(--bg2));
+  color:#fff; -webkit-font-smoothing:antialiased; overflow:hidden;
+  touch-action: manipulation;
+}
+
+
+#game-wrap{position:relative; width:100vw; height:100vh; overflow:hidden;}
+#hallway{
+  position:absolute; inset:0;
+  background:
+    linear-gradient(180deg, rgba(0,0,0,0.25), rgba(0,0,0,0.6)),
+    repeating-linear-gradient(90deg, rgba(255,255,255,0.02) 0 1px, transparent 1px 40px);
+  background-blend-mode:overlay;
+  display:flex; align-items:flex-end; justify-content:center;
+  padding-bottom:18vh;
+}
+
+
+#floor{
+  position:absolute; left:0; right:0; bottom:0; height:22vh;
+  background: linear-gradient(180deg,#0a0a0a,#000);
+  box-shadow: inset 0 40px 60px rgba(0,0,0,0.7);
+}
+
+
+.door {
+  width:96px; height:150px;
+  margin:0 22px;
+  position:relative; display:inline-flex; align-items:center; justify-content:center;
+  background: linear-gradient(180deg,#8b5a2b,#4c2b12);
+  border:4px solid rgba(255,255,255,0.06);
+  box-shadow: 0 6px 18px rgba(0,0,0,0.6), 0 0 18px rgba(255,255,255,0.03) inset;
+  border-radius:6px;
+  cursor:pointer; user-select:none; -webkit-tap-highlight-color:transparent;
+  transition: transform 180ms cubic-bezier(.2,.9,.2,1), box-shadow 150ms;
+  -webkit-touch-callout:none;
+}
+.door:hover{ transform:translateY(-8px) scale(1.04); }
+.door:active{ transform:translateY(-4px) scale(1.02); }
+
+
+.door::before{
+  content:""; position:absolute; top:6px; left:6px; right:6px; height:36px;
+  background: linear-gradient(180deg, rgba(0,0,0,0.15), rgba(255,255,255,0.02));
+  border-radius:4px;
+  box-shadow: inset 0 2px 0 rgba(255,255,255,0.03);
+}
+
+
+.door .plaque{
+  width:48px; height:48px; background:rgba(0,0,0,0.18);
+  border-radius:6px; display:flex; align-items:center; justify-content:center;
+  border:2px solid rgba(255,255,255,0.04); color:#fff; font-size:12px;
+  text-shadow:0 1px 0 rgba(0,0,0,.6);
+}
+
+
+.door .hint-badge{
+  position:absolute; top:6px; right:6px; background:rgba(255,220,60,0.95);
+  color:#222; padding:4px 6px; font-size:9px; border-radius:4px; display:none;
+}
+
+
+@keyframes doorFlash {
+  0%{ box-shadow:0 10px 30px rgba(0,0,0,0.6); transform:translateY(-6px) scale(1.04) }
+  50%{ box-shadow:0 18px 40px rgba(102,255,102,0.25); transform:translateY(-10px) scale(1.08) }
+  100%{ box-shadow:0 10px 30px rgba(0,0,0,0.6); transform:translateY(-6px) scale(1.04) }
+}
+
+
+@keyframes shake {
+  0%{ transform:translateX(0) }
+  20%{ transform:translateX(-8px) rotate(-2deg) }
+  40%{ transform:translateX(6px) rotate(2deg) }
+  60%{ transform:translateX(-6px) rotate(-2deg) }
+  80%{ transform:translateX(4px) rotate(1deg) }
+  100%{ transform:translateX(0) }
+}
+
+
+#player{
+  width:56px; height:56px; border-radius:8px;
+  background: linear-gradient(180deg,#00b050,#007a2e);
+  border:3px solid #003800;
+  display:flex; align-items:center; justify-content:center;
+  position:absolute; left:50%; transform:translateX(-50%);
+  bottom:20vh; z-index:40;
+  box-shadow: 0 12px 30px rgba(0,0,0,0.6);
+  animation: playerBob 900ms ease-in-out infinite;
+}
+#player .face{
+  width:30px; height:18px; background:#052; border-radius:4px;
+  box-shadow: inset 0 -4px 6px rgba(0,0,0,0.3);
+}
+@keyframes playerBob {
+  0%{ transform:translate(-50%,0) translateY(0) scaleY(1) }
+  50%{ transform:translate(-50%,-8px) scaleY(1.02) }
+  100%{ transform:translate(-50%,0) scaleY(1) }
+}
+
+
+.player-bounce{ animation: playerBounce 450ms ease forwards; }
+@keyframes playerBounce {
+  0%{ transform:translate(-50%,0) scale(1) }
+  30%{ transform:translate(-50%,-18px) scale(1.06) }
+  100%{ transform:translate(-50%,0) scale(1) }
+}
+
+
+#hud {
+  position:absolute; top:10px; left:12px; z-index:60; display:flex; gap:12px; align-items:center;
+}
+.hud-box{
+  background:rgba(0,0,0,0.45); padding:8px 10px; border-radius:6px; border:2px solid rgba(255,255,255,0.04);
+  font-size:12px;
+}
+
+
+#top-right{ position:absolute; top:12px; right:12px; z-index:60; display:flex; gap:8px; flex-direction:column; align-items:flex-end; }
+
+
+#wins-left{ font-size:12px; padding:8px 10px; }
+#progress {
+  width:170px; height:14px; background:#0f0f0f; border-radius:8px; overflow:hidden; border:2px solid rgba(255,255,255,0.03);
+}
+#progress-fill{ height:100%; width:0%; background:linear-gradient(90deg,var(--accent),#00ccff); transition: width 360ms ease; }
+
+
+#music-controls{ display:flex; gap:8px; align-items:center; }
+
+
+#textbox {
+  position:absolute; inset:0; display:none; z-index:80; align-items:center; justify-content:center;
+  background: linear-gradient(180deg, rgba(0,0,0,0.6), rgba(0,0,0,0.9));
+  padding:18px;
+}
+#question-card{
+  width:min(680px,92%); background:linear-gradient(180deg,#0f1720,#0b0b12); padding:18px;
+  border-radius:10px; border:3px solid rgba(255,255,255,0.03); text-align:center;
+  box-shadow:0 10px 30px rgba(0,0,0,0.6);
+}
+#question-text{ font-size:16px; margin-bottom:12px; }
+#answer-input{ padding:10px 12px; width:220px; font-size:14px; border-radius:6px; border:2px solid rgba(255,255,255,0.04); background:#071017; color:#fff; }
+
+
+.btn{ padding:8px 12px; border-radius:8px; background:#111; border:2px solid rgba(255,255,255,0.04); cursor:pointer; font-size:12px; }
+
+
+#feedback{ margin-top:8px; font-size:12px; height:18px; color:#ffdd; }
+
+
+#boss-overlay{ position:absolute; inset:0; display:none; z-index:120; align-items:center; justify-content:center;
+  background:linear-gradient(180deg, rgba(0,0,0,0.85), rgba(32,0,20,0.9)); flex-direction:column; gap:12px; padding:18px;
+}
+#boss-box{ width:min(720px,94%); padding:18px; border-radius:10px; background:linear-gradient(180deg,#3a0a0a,#1b0404); border:3px solid rgba(255,80,80,0.12); text-align:center; }
+
+
+#end-screen{ position:absolute; inset:0; display:none; z-index:200; align-items:center; justify-content:center; flex-direction:column; gap:16px; padding:20px; }
+
+
+@media (max-width:720px){
+  .door{ width:76px; height:130px; margin:0 10px; }
+  #player{ width:48px; height:48px; bottom:18vh; }
+  #progress{ width:130px; }
+  #question-card{ padding:12px; }
+}
+</style>
+</head>
+<body>
+<div id="game-wrap">
+  <div id="hallway">
+    <div id="floor"></div>
+    <div id="doors-row" style="z-index:30; display:flex; gap:20px; align-items:flex-end;">
+      <div class="door" id="door-left" role="button" tabindex="0">
+        <div class="plaque">Door</div>
+        <div class="hint-badge">Hint</div>
+      </div>
+      <div class="door" id="door-center" role="button" tabindex="0">
+        <div class="plaque">Door</div>
+        <div class="hint-badge">Hint</div>
+      </div>
+      <div class="door" id="door-right" role="button" tabindex="0">
+        <div class="plaque">Door</div>
+        <div class="hint-badge">Hint</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="player" aria-hidden="true"><div class="face"></div></div>
+
+  <div id="hud">
+    <div class="hud-box">❤️ Lives: <span id="lives">3</span></div>
+    <div class="hud-box">Score: <span id="score">0</span></div>
+  </div>
+
+  <div id="top-right">
+    <div class="hud-box" id="wins-left">10 Left</div>
+    <div id="progress" class="hud-box"><div id="progress-fill"></div></div>
+    <div id="music-controls" class="hud-box">
+      <button id="mute-btn" class="btn">Mute</button>
+      <button id="bgm-vol-down" class="btn">-</button>
+      <button id="bgm-vol-up" class="btn">+</button>
+    </div>
+  </div>
+
+  <div id="textbox">
+    <div id="question-card">
+      <div id="question-text">A sample question</div>
+      <input id="answer-input" placeholder="x = ?" />
+      <div style="margin-top:12px;">
+        <button id="submit-btn" class="btn">Submit</button>
+        <button id="close-btn" class="btn">Close</button>
+      </div>
+      <div id="feedback"></div>
+    </div>
+  </div>
+
+  <div id="boss-overlay">
+    <div id="boss-box">
+      <div style="font-size:18px; color:#ffd9d9">👹 BOSS ROOM 👹</div>
+      <div style="height:8px"></div>
+      <div id="boss-text" style="font-size:16px; margin-bottom:12px;">Defeat the boss with a tougher algebra problem</div>
+      <div id="boss-question" style="font-size:18px; margin-bottom:8px;"></div>
+      <input id="boss-input" placeholder="x = ?" style="padding:10px 12px; width:220px; border-radius:6px; border:2px solid rgba(255,255,255,0.04); background:#071017; color:#fff;">
+      <div style="margin-top:10px;">
+        <button id="boss-submit" class="btn">Attack</button>
+        <button id="boss-flee" class="btn">Flee (-1 life)</button>
+      </div>
+      <div id="boss-feedback" style="margin-top:10px; color:#ffd9d9; min-height:18px;"></div>
+    </div>
+  </div>
+
+  <div id="end-screen">
+    <div id="end-box" style="font-size:20px; text-align:center; padding:18px; border-radius:12px; background:rgba(0,0,0,0.6);">
+      <div id="end-title" style="font-size:20px; margin-bottom:10px;"></div>
+      <div id="end-sub" style="font-size:12px; margin-bottom:12px;"></div>
+      <div><button id="restart-btn" class="btn">Play Again</button></div>
+    </div>
+  </div>
+
+</div>
+
+>
+<audio id="bgm" src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" loop crossorigin="anonymous"></audio>
+<audio id="snd-correct" src="https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg" crossorigin="anonymous"></audio>
+<audio id="snd-wrong" src="https://actions.google.com/sounds/v1/cartoon/metal_clang.ogg" crossorigin="anonymous"></audio>
+<audio id="snd-death" src="https://actions.google.com/sounds/v1/human_voices/boo.ogg" crossorigin="anonymous"></audio>
+<audio id="snd-fanfare" src="https://actions.google.com/sounds/v1/alarms/digital_watch_alarm_long.ogg" crossorigin="anonymous"></audio>
+
+<script>
+
+let lives = 3;
+let score = 0;
+let correctAnswers = 0; 
+let currentAnswer = null;
+let answering = false;
+let inBoss = false;
+
+
+const doors = {
+  left: document.getElementById('door-left'),
+  center: document.getElementById('door-center'),
+  right: document.getElementById('door-right')
+};
+const plaqueText = (el,t)=>{ const p = el.querySelector('.plaque'); if(p) p.textContent = t; }
+
+
+const livesEl = document.getElementById('lives');
+const scoreEl = document.getElementById('score');
+const winsLeftEl = document.getElementById('wins-left');
+const progressFill = document.getElementById('progress-fill');
+const feedback = document.getElementById('feedback');
+
+
+const textbox = document.getElementById('textbox');
+const questionText = document.getElementById('question-text');
+const answerInput = document.getElementById('answer-input');
+const submitBtn = document.getElementById('submit-btn');
+const closeBtn = document.getElementById('close-btn');
+
+const bossOverlay = document.getElementById('boss-overlay');
+const bossQuestion = document.getElementById('boss-question');
+const bossInput = document.getElementById('boss-input');
+const bossSubmit = document.getElementById('boss-submit');
+const bossFlee = document.getElementById('boss-flee');
+const bossFeedback = document.getElementById('boss-feedback');
+
+const endScreen = document.getElementById('end-screen');
+const endTitle = document.getElementById('end-title');
+const endSub = document.getElementById('end-sub');
+const restartBtn = document.getElementById('restart-btn');
+
+const playerEl = document.getElementById('player');
+
+
+const bgm = document.getElementById('bgm');
+const sCorrect = document.getElementById('snd-correct');
+const sWrong = document.getElementById('snd-wrong');
+const sDeath = document.getElementById('snd-death');
+const sFanfare = document.getElementById('snd-fanfare');
+let muted = false;
+
+
+const muteBtn = document.getElementById('mute-btn');
+const volUp = document.getElementById('bgm-vol-up');
+const volDown = document.getElementById('bgm-vol-down');
+
+
+function init(){
+
+  plaqueText(doors.left, 'Left');
+  plaqueText(doors.center, 'Center');
+  plaqueText(doors.right, 'Right');
+
+
+  for (const k of Object.keys(doors)){
+    const el = doors[k];
+    el.addEventListener('click', ()=>onDoorClick(el));
+    el.addEventListener('keydown', (e)=>{ if(e.key==='Enter' || e.key===' ') onDoorClick(el); });
+  }
+
+  submitBtn.addEventListener('click', ()=>submitAnswer());
+  closeBtn.addEventListener('click', ()=>closeTextbox());
+  answerInput.addEventListener('keydown', (e)=>{ if(e.key==='Enter') submitAnswer(); });
+  bossSubmit.addEventListener('click', ()=>submitBoss());
+  bossFlee.addEventListener('click', ()=>fleeBoss());
+  restartBtn.addEventListener('click', ()=>location.reload());
+
+  muteBtn.addEventListener('click', ()=>{ muted = !muted; setMute(muted); });
+  volUp.addEventListener('click', ()=>{ bgm.volume = Math.min(1, bgm.volume + 0.12); });
+  volDown.addEventListener('click', ()=>{ bgm.volume = Math.max(0, bgm.volume - 0.12); });
+
+
+  bgm.volume = 0.28;
+  setTimeout(()=>{ try{ bgm.play().catch(()=>{}); }catch(e){} }, 300);
+
+  updateHUD();
+  seedDoors();
+  maybeAddHints();
+}
+
+
+function updateHUD(){
+  livesEl.textContent = lives;
+  scoreEl.textContent = score;
+  winsLeftEl.textContent = Math.max(0, 10 - correctAnswers) + ' Left';
+  const pct = Math.min(100, Math.round((correctAnswers / 10) * 100));
+  progressFill.style.width = pct + '%';
+}
+
+
+function randomAlgebraProblem(){
+  const a = randInt(2,9);
+  const x = randInt(1,10);
+  const b = randInt(1,10);
+  const result = a*x + b;
+  return { question:`${a}x + ${b} = ${result}`, answer:x };
+}
+
+function bossProblem(){
+  const a = randInt(5,15);
+  const x = randInt(3,14);
+  const b = randInt(-10,10);
+  const result = a*x + b;
+  const bStr = b>=0?`+ ${b}`:`- ${Math.abs(b)}`;
+  return { question:`${a}x ${bStr} = ${result}`, answer:x };
+}
+
+
+function seedDoors(){
+
+  const prob = randomAlgebraProblem();
+  currentAnswer = prob.answer;
+  
+  let opts = [currentAnswer, currentAnswer+2, Math.max(1, currentAnswer-1)];
+  opts = shuffle(opts);
+  doors.left.dataset.value = opts[0];
+  doors.center.dataset.value = opts[1];
+  doors.right.dataset.value = opts[2];
+
+  doors.left.dataset.q = prob.question;
+  doors.center.dataset.q = prob.question;
+  doors.right.dataset.q = prob.question;
+}
+
+
+function maybeAddHints(){
+  for (const k of Object.keys(doors)){
+    const el = doors[k];
+    const hintBadge = el.querySelector('.hint-badge');
+    if(Math.random() < 0.2){
+      hintBadge.style.display = 'block';
+      hintBadge.textContent = 'x∈1..10';
+      el.title = 'Hint: x is between 1 and 10';
+    } else {
+      hintBadge.style.display = 'none';
+      el.title = '';
+    }
+  }
+}
+
+
+function onDoorClick(el){
+  if(answering || inBoss) return;
+  answering = true;
+
+  const q = el.dataset.q || randomAlgebraProblem().question;
+  questionText.textContent = q;
+  answerInput.value = '';
+  feedback.textContent = '';
+  textbox.style.display = 'flex';
+
+  el.classList.add('door-selected');
+
+  textbox.dataset.chosen = el.id;
+}
+
+
+function submitAnswer(){
+  const valRaw = (answerInput.value || '').trim().toLowerCase();
+  if(!valRaw.startsWith('x=')){
+    feedback.textContent = 'Format: x = <number>';
+    answering = false;
+    return;
+  }
+  const user = parseInt(valRaw.split('=')[1].trim());
+  if(isNaN(user)){
+    feedback.textContent = 'Format: x = <number>';
+    answering = false;
+    return;
+  }
+
+  const chosenId = textbox.dataset.chosen;
+  const chosenDoor = document.getElementById(chosenId);
+  const doorValue = parseInt(chosenDoor.dataset.value);
+
+  if(user === currentAnswer && user === doorValue){
+
+    onCorrect(chosenDoor);
+  } else if(doorValue === currentAnswer && user === currentAnswer){
+    onCorrect(chosenDoor);
+  } else if(doorValue === currentAnswer && isNaN(user)){
+
+    onCorrect(chosenDoor);
+  } else {
+    onWrong(chosenDoor);
+  }
+  textbox.style.display = 'none';
+  answering = false;
+
+  if(!inBoss) setTimeout(()=>{ seedDoors(); maybeAddHints(); updateHUD(); }, 300);
+}
+
+
+function closeTextbox(){
+  textbox.style.display = 'none';
+  answering = false;
+}
+
+
+function onCorrect(doorEl){
+  score += 10;
+  correctAnswers++;
+  animateCorrect(doorEl);
+  playSound(sCorrect);
+
+  playerEl.classList.remove('player-bounce');
+  void playerEl.offsetWidth;
+  playerEl.classList.add('player-bounce');
+
+  updateHUD();
+
+  if(correctAnswers >= 10){
+    setTimeout(()=>enterBoss(), 420);
+  }
+}
+
+
+function onWrong(doorEl){
+  lives--;
+  score = Math.max(0, score-3);
+  playSound(sWrong);
+  animateWrong(doorEl);
+  updateHUD();
+  if(lives <= 0){
+    setTimeout(()=>triggerDeath(), 400);
+  }
+}
+
+
+function animateCorrect(el){
+  el.style.animation = 'doorFlash 420ms ease';
+  setTimeout(()=> el.style.animation = '', 450);
+}
+function animateWrong(el){
+  el.style.animation = 'shake 520ms ease';
+  setTimeout(()=> el.style.animation = '', 560);
+}
+
+
+let bossAnswer = null;
+function enterBoss(){
+  inBoss = true;
+  bossOverlay.style.display = 'flex';
+  const b = bossProblem();
+  bossQuestion.textContent = b.question;
+  bossAnswer = b.answer;
+  bossFeedback.textContent = '';
+
+  playerEl.style.transform = 'translate(-50%,-6px) scale(1.06)';
+  playerEl.style.transition = 'transform 220ms';
+}
+
+function submitBoss(){
+  const v = (bossInput.value || '').trim().toLowerCase();
+  if(!v.startsWith('x=')){ bossFeedback.textContent = 'Format: x = <number>'; return; }
+  const u = parseInt(v.split('=')[1].trim());
+  if(isNaN(u)){ bossFeedback.textContent = 'Format: x = <number>'; return; }
+  if(u === bossAnswer){
+
+    playSound(sFanfare);
+    bossFeedback.textContent = 'Boss defeated!';
+    inBoss = false;
+    bossOverlay.style.display = 'none';
+    showWin();
+  } else {
+    bossFeedback.textContent = `Wrong! Boss hits you. (x = ${bossAnswer})`;
+    playSound(sWrong);
+    lives--;
+    updateHUD();
+    inBoss = false;
+    bossOverlay.style.display = 'none';
+    if(lives <= 0) triggerDeath();
+  }
+}
+
+function fleeBoss(){
+  bossFeedback.textContent = 'You fled and lost 1 life.';
+  lives--;
+  updateHUD();
+  inBoss = false;
+  bossOverlay.style.display = 'none';
+  if(lives <= 0) triggerDeath();
+}
+
+
+function triggerDeath(){
+  playSound(sDeath);
+  endTitle.textContent = 'YOU DIED';
+  endSub.textContent = 'Refresh or press Play Again to retry';
+  endScreen.style.display = 'flex';
+  endScreen.style.background = 'linear-gradient(180deg, rgba(120,0,20,0.9), rgba(0,0,0,0.9))';
+
+  for(const k of Object.keys(doors)) doors[k].style.pointerEvents = 'none';
+}
+
+function showWin(){
+  playSound(sFanfare);
+  endTitle.textContent = 'CONGRATULATIONS — YOU WON!';
+  endSub.textContent = `Score: ${score}`;
+  endScreen.style.display = 'flex';
+  endScreen.style.background = 'linear-gradient(180deg, rgba(0,120,40,0.9), rgba(0,0,0,0.9))';
+  for(const k of Object.keys(doors)) doors[k].style.pointerEvents = 'none';
+}
+
+
+function randInt(a,b){ return Math.floor(Math.random()*(b-a+1))+a; }
+function shuffle(arr){ return arr.sort(()=>Math.random()-0.5); }
+
+function playSound(audioEl){
+  try{ if(!muted){ audioEl.currentTime = 0; audioEl.play().catch(()=>{}); } }catch(e){}
+}
+
+
+function setMute(m){
+  muted = !!m;
+  bgm.muted = muted;
+  sCorrect.muted = muted;
+  sWrong.muted = muted;
+  sDeath.muted = muted;
+  sFanfare.muted = muted;
+  muteBtn.textContent = muted? 'Unmute' : 'Mute';
+}
+setMute(false);
+
+
+function playBGM(){
+  try{ bgm.play().catch(()=>{}); }catch(e){}
+}
+window.addEventListener('load', ()=>{
+  init();
+  playBGM();
+});
+
+
+for (const k of Object.keys(doors)){
+  const el = doors[k];
+  el.addEventListener('touchstart', (e)=>{ e.preventDefault(); el.classList.add('touched'); setTimeout(()=>el.classList.remove('touched'), 220); });
+}
+
+
+window.__game_reset = function(){
+  lives = 3; score = 0; correctAnswers = 0; currentAnswer = null; inBoss = false;
+  for(const k of Object.keys(doors)) doors[k].style.pointerEvents = 'auto';
+  endScreen.style.display = 'none';
+  bossOverlay.style.display = 'none';
+  textbox.style.display = 'none';
+  playerEl.style.transform = 'translate(-50%,0)';
+  seedDoors(); maybeAddHints(); updateHUD();
+};
+</script>
+</body>
+</html>
